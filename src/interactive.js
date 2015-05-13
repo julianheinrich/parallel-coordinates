@@ -6,7 +6,7 @@ pc.interactive = function() {
 // expose a few objects
 pc.xscale = xscale;
 pc.yscale = yscale;
-pc.ctx = ctx;
+//pc.ctx = ctx;
 pc.canvas = canvas;
 pc.g = function() { return g; };
 
@@ -27,7 +27,7 @@ pc.resize = function() {
 
   // axes, destroys old brushes.
   if (g) pc.createAxes();
-  if (flags.shadows) paths(__.data, ctx.shadows);
+  if (flags.shadows) pc.shadows();
   if (flags.brushable) pc.brushable();
   if (flags.reorderable) pc.reorderable();
 

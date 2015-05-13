@@ -4,9 +4,6 @@ var renderer = {
     "None": {
       install: function(pc) {},           // Nothing to be done.
       clear: function(layer) {},
-      resize: function() {},
-      render: function() {},
-      reset: function() {},
       uninstall: function(pc) {}		  // Nothing to be done.
     }
   },

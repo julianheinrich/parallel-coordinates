@@ -65,14 +65,13 @@ var events = d3.dispatch.apply(this,["render", "resize", "highlight", "brush", "
     line = d3.svg.line(),
     axis = d3.svg.axis().orient("left").ticks(5),
     g, // groups for axes, brushes
-    ctx = {},
     canvas = {},
     clusterCentroids = [];
 
 // side effects for setters
 var side_effects = d3.dispatch.apply(this,d3.keys(__))
-//  .on("composite", function(d) { ctx.foreground.globalCompositeOperation = d.value; })
-//  .on("alpha", function(d) { ctx.foreground.globalAlpha = d.value; })
+  .on("composite", function(d) { renderer.currentRenderer().composite(d.value); })
+  .on("alpha", function(d) { renderer.currentRenderer().alpha(d.value); })
   .on("width", function(d) { pc.resize(); })
   .on("height", function(d) { pc.resize(); })
   .on("margin", function(d) { pc.resize(); })
@@ -208,7 +207,7 @@ pc.autoscale = function() {
   // xscale
   xscale.rangePoints([0, w()], 1);
 
-  pc.resize();
+  renderer.currentRenderer().resize();
   
   return this;
 };
@@ -334,9 +333,6 @@ var renderer = {
     "None": {
       install: function(pc) {},           // Nothing to be done.
       clear: function(layer) {},
-      resize: function() {},
-      render: function() {},
-      reset: function() {},
       uninstall: function(pc) {}		  // Nothing to be done.
     }
   },
@@ -389,13 +385,19 @@ pc.renderType = function(type) {
 
 (function() {
 
+	var ctx = {};
+	
+	function alpha(value) {
+		ctx.foreground.globalAlpha = value;
+	}
+	
 	// draw little dots on the axis line where data intersects
 	function axisDots() {
-		var ctx = pc.ctx.marks;
-		ctx.globalAlpha = d3.min([ 1 / Math.pow(__.data.length, 1 / 2), 1 ]);
+//		var ctx = this.ctx.marks;
+		ctx.marks.globalAlpha = d3.min([ 1 / Math.pow(__.data.length, 1 / 2), 1 ]);
 		__.data.forEach(function(d) {
 			__.dimensions.map(function(p, i) {
-				ctx.fillRect(position(p) - 0.75, yscale[p](d[p]) - 0.75, 1.5, 1.5);
+				ctx.marks.fillRect(position(p) - 0.75, yscale[p](d[p]) - 0.75, 1.5, 1.5);
 			});
 		});
 		return this;
@@ -406,6 +408,10 @@ pc.renderType = function(type) {
 		return this;
 	};
 
+	function composite(mode) {
+		ctx.foreground.globalCompositeOperation = mode;
+	}
+	
 	function install() {
 		layers.forEach(function(layer) {
 			canvas[layer] = pc.selection
@@ -419,8 +425,6 @@ pc.renderType = function(type) {
 		pc.render = render;
 		pc.resetRenderer = resetRenderer;
 		pc.clear = clear;
-		pc.resize = resize;
-		
 		
 	}
 
@@ -529,23 +533,23 @@ pc.renderType = function(type) {
 			__.highlighted.forEach(path_highlight);
 		}
 	};
-//
-//	var rqueue = d3.renderQueue(path_foreground)
-//	.rate(50)
-//	.clear(function() {
-//		pc.clear('foreground');
-//		pc.clear('highlight');
-//	});
-//
-//	pc.render.queue = function() {
-//		if (__.brushed) {
-//			rqueue(__.brushed);
-//			__.highlighted.forEach(path_highlight);
-//		} else {
-//			rqueue(__.data);
-//			__.highlighted.forEach(path_highlight);
-//		}
-//	};
+
+	var rqueue = d3.renderQueue(path_foreground)
+	.rate(50)
+	.clear(function() {
+		clear('foreground');
+		clear('highlight');
+	});
+
+	render.queue = function() {
+		if (__.brushed) {
+			rqueue(__.brushed);
+			__.highlighted.forEach(path_highlight);
+		} else {
+			rqueue(__.data);
+			__.highlighted.forEach(path_highlight);
+		}
+	};
 
 	function resetRenderer() {
 		layers.forEach(function(layer) {
@@ -564,6 +568,9 @@ pc.renderType = function(type) {
 
 	renderer.types["canvas"] = {
 			install: install,
+			alpha: alpha,
+			composite: composite,
+			resize: resize,
 			uninstall: uninstall
 	}
 
@@ -1572,7 +1579,7 @@ pc.interactive = function() {
 // expose a few objects
 pc.xscale = xscale;
 pc.yscale = yscale;
-pc.ctx = ctx;
+//pc.ctx = ctx;
 pc.canvas = canvas;
 pc.g = function() { return g; };
 
@@ -1593,7 +1600,7 @@ pc.resize = function() {
 
   // axes, destroys old brushes.
   if (g) pc.createAxes();
-  if (flags.shadows) paths(__.data, ctx.shadows);
+  if (flags.shadows) pc.shadows();
   if (flags.brushable) pc.brushable();
   if (flags.reorderable) pc.reorderable();
 

@@ -66,7 +66,7 @@ pc.autoscale = function() {
   // xscale
   xscale.rangePoints([0, w()], 1);
 
-  pc.resize();
+  renderer.currentRenderer().resize();
   
   return this;
 };

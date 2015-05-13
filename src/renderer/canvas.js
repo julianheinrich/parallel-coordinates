@@ -2,13 +2,19 @@
 
 (function() {
 
+	var ctx = {};
+	
+	function alpha(value) {
+		ctx.foreground.globalAlpha = value;
+	}
+	
 	// draw little dots on the axis line where data intersects
 	function axisDots() {
-		var ctx = pc.ctx.marks;
-		ctx.globalAlpha = d3.min([ 1 / Math.pow(__.data.length, 1 / 2), 1 ]);
+//		var ctx = this.ctx.marks;
+		ctx.marks.globalAlpha = d3.min([ 1 / Math.pow(__.data.length, 1 / 2), 1 ]);
 		__.data.forEach(function(d) {
 			__.dimensions.map(function(p, i) {
-				ctx.fillRect(position(p) - 0.75, yscale[p](d[p]) - 0.75, 1.5, 1.5);
+				ctx.marks.fillRect(position(p) - 0.75, yscale[p](d[p]) - 0.75, 1.5, 1.5);
 			});
 		});
 		return this;
@@ -19,6 +25,10 @@
 		return this;
 	};
 
+	function composite(mode) {
+		ctx.foreground.globalCompositeOperation = mode;
+	}
+	
 	function install() {
 		layers.forEach(function(layer) {
 			canvas[layer] = pc.selection
@@ -32,8 +42,6 @@
 		pc.render = render;
 		pc.resetRenderer = resetRenderer;
 		pc.clear = clear;
-		pc.resize = resize;
-		
 		
 	}
 
@@ -142,23 +150,23 @@
 			__.highlighted.forEach(path_highlight);
 		}
 	};
-//
-//	var rqueue = d3.renderQueue(path_foreground)
-//	.rate(50)
-//	.clear(function() {
-//		pc.clear('foreground');
-//		pc.clear('highlight');
-//	});
-//
-//	pc.render.queue = function() {
-//		if (__.brushed) {
-//			rqueue(__.brushed);
-//			__.highlighted.forEach(path_highlight);
-//		} else {
-//			rqueue(__.data);
-//			__.highlighted.forEach(path_highlight);
-//		}
-//	};
+
+	var rqueue = d3.renderQueue(path_foreground)
+	.rate(50)
+	.clear(function() {
+		clear('foreground');
+		clear('highlight');
+	});
+
+	render.queue = function() {
+		if (__.brushed) {
+			rqueue(__.brushed);
+			__.highlighted.forEach(path_highlight);
+		} else {
+			rqueue(__.data);
+			__.highlighted.forEach(path_highlight);
+		}
+	};
 
 	function resetRenderer() {
 		layers.forEach(function(layer) {
@@ -177,6 +185,9 @@
 
 	renderer.types["canvas"] = {
 			install: install,
+			alpha: alpha,
+			composite: composite,
+			resize: resize,
 			uninstall: uninstall
 	}
 

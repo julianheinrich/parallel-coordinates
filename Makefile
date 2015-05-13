@@ -7,6 +7,8 @@ TARGETS= \
 	autoscale.js \
 	dimensions.js \
 	render.js \
+	renderer/renderer.js \
+	renderer/canvas.js \
 	bundling.js \
 	styles.js \
 	clear.js \

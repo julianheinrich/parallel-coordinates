@@ -7,7 +7,8 @@ var events = d3.dispatch.apply(this,["render", "resize", "highlight", "brush", "
       axes: false,
       interactive: false,
       shadows: false,
-      debug: false
+      debug: false,
+      gl: false
     },
     xscale = d3.scale.ordinal(),
     yscale = {},
@@ -21,14 +22,14 @@ var events = d3.dispatch.apply(this,["render", "resize", "highlight", "brush", "
 
 // side effects for setters
 var side_effects = d3.dispatch.apply(this,d3.keys(__))
-  .on("composite", function(d) { ctx.foreground.globalCompositeOperation = d.value; })
-  .on("alpha", function(d) { ctx.foreground.globalAlpha = d.value; })
+//  .on("composite", function(d) { ctx.foreground.globalCompositeOperation = d.value; })
+//  .on("alpha", function(d) { ctx.foreground.globalAlpha = d.value; })
   .on("width", function(d) { pc.resize(); })
   .on("height", function(d) { pc.resize(); })
   .on("margin", function(d) { pc.resize(); })
   .on("rate", function(d) { rqueue.rate(d.value); })
   .on("data", function(d) {
-    if (flags.shadows){paths(__.data, ctx.shadows);}
+    if (flags.shadows){pc.shadows();}
   })
   .on("dimensions", function(d) {
     xscale.domain(__.dimensions);

@@ -5,12 +5,7 @@ var pc = function(selection) {
   __.height = selection[0][0].clientHeight;
 
   // canvas data layers
-  ["shadows", "marks", "foreground", "highlight"].forEach(function(layer) {
-    canvas[layer] = selection
-      .append("canvas")
-      .attr("class", layer)[0][0];
-    ctx[layer] = canvas[layer].getContext("2d");
-  });
+  pc.renderType("canvas");  
 
   // svg tick and brush layers
   pc.svg = selection

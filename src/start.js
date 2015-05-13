@@ -19,7 +19,12 @@ d3.parcoords = function(config) {
     bundleDimension: null,
     smoothness: 0.0,
     showControlPoints: false,
-    hideAxis : []
+    hideAxis : [],
+    // enables experimental webgl.
+    // To be removed once automatic detection and all features work in webgl.
+//    webgl: false,
+//    normalize: false,
+//    variance: 0.001
   };
 
   extend(__, config);

@@ -11,7 +11,7 @@ function flipAxisAndUpdatePCP(dimension) {
       .call(axis.scale(yscale[dimension]));
 
   pc.render();
-  if (flags.shadows) paths(__.data, ctx.shadows);
+  if (flags.shadows) pc.shadows();
 }
 
 function rotateLabels() {
@@ -116,7 +116,7 @@ pc.updateAxes = function() {
       .duration(1100)
       .each(function(d) { d3.select(this).call(axis.scale(yscale[d])); });
 
-  if (flags.shadows) paths(__.data, ctx.shadows);
+  if (flags.shadows) pc.shadows();
   if (flags.brushable) pc.brushable();
   if (flags.reorderable) pc.reorderable();
   if (pc.brushMode() !== "None") {
@@ -178,7 +178,7 @@ pc.reorderable = function() {
         delete dragging[d];
         d3.select(this).transition().attr("transform", "translate(" + xscale(d) + ")");
         pc.render();
-        if (flags.shadows) paths(__.data, ctx.shadows);
+        if (flags.shadows) pc.shadows();
       }));
   flags.reorderable = true;
   return this;

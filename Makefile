@@ -9,6 +9,7 @@ TARGETS= \
 	render.js \
 	renderer/renderer.js \
 	renderer/canvas.js \
+	renderer/webgl.js \
 	bundling.js \
 	styles.js \
 	clear.js \

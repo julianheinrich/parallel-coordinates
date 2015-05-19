@@ -1,0 +1,47 @@
+<!doctype html>
+<title>WebGL Example</title>
+<link rel="stylesheet" type="text/css" href="../d3.parcoords.css">
+<link rel="stylesheet" type="text/css" href="style.css">
+<script src="lib/d3.min.js"></script>
+<script src="lib/gl-matrix-min.js"></script>
+<script src="lib/webgl-utils.js"></script>
+<script src="lib/webgl-debug.js"></script>
+<script src="lib/underscore.js"></script>
+<script src="../d3.parcoords.js"></script>
+<div id="example-gl" class="parcoords" style="width:1300px;height:370px;"></div>
+
+<script id="progressive">// linear color scale
+// interact with this variable from a javascript console
+var pc_gl;
+
+// load csv file and create the chart
+d3.csv('data/cars.csv', function(data) {
+  var colorgen = d3.scale.category20();
+  var colors = {};
+  _(data).chain()
+    .pluck('group')
+    .uniq()
+    .each(function(d,i) {
+      colors[d] = colorgen(i);
+    });
+
+  var color = function(d) { return colors[d.group]; };
+
+  pc_gl = d3.parcoords()("#example-gl")
+    .data(data)
+    .color(color)
+    .alpha(0.4)
+    .margin({ top: 24, left: 150, bottom: 12, right: 0 })
+ //   .mode("queue")
+    .render()
+    .reorderable()
+    .brushMode("1D-axes");
+    
+
+  pc_gl.svg.selectAll("text")
+    .style("font", "10px sans-serif");
+});
+</script>
+
+
+

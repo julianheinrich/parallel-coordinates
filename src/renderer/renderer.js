@@ -13,8 +13,6 @@ var renderer = {
   }
 };
 
-var layers = ["shadows", "marks", "foreground", "highlight"];
-
 pc.renderers = function() {
   return Object.getOwnPropertyNames(renderer.types);
 };

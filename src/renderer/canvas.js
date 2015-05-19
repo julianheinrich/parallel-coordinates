@@ -3,6 +3,7 @@
 (function() {
 
 	var ctx = {};
+	var layers = ["shadows", "marks", "foreground", "highlight"];
 	
 	function alpha(value) {
 		ctx.foreground.globalAlpha = value;

@@ -23,8 +23,8 @@ d3.parcoords = function(config) {
     // enables experimental webgl.
     // To be removed once automatic detection and all features work in webgl.
 //    webgl: false,
-//    normalize: false,
-//    variance: 0.001
+    normalize: false,
+    variance: 0.001
   };
 
   extend(__, config);

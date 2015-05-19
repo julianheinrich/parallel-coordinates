@@ -5,7 +5,7 @@ var pc = function(selection) {
   __.height = selection[0][0].clientHeight;
 
   // canvas data layers
-  pc.renderType("canvas");  
+  pc.renderType("webgl");  
 
   // svg tick and brush layers
   pc.svg = selection

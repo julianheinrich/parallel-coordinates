@@ -3,13 +3,13 @@ all: d3.parcoords.js
 TARGETS= \
 	start.js \
 	pc.js \
-	events.js \
-	autoscale.js \
-	dimensions.js \
 	render.js \
 	renderer/renderer.js \
 	renderer/canvas.js \
 	renderer/webgl.js \
+	events.js \
+	autoscale.js \
+	dimensions.js \
 	bundling.js \
 	styles.js \
 	clear.js \

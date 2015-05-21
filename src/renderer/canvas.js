@@ -2,13 +2,16 @@
 
 (function() {
 
+	var config = {
+			composite: "source-over",
+			alpha: 0.7,
+			mode: "default",
+			rate: 20
+	};
+
 	var ctx = {};
 	var layers = ["shadows", "marks", "foreground", "highlight"];
-	
-	function alpha(value) {
-		ctx.foreground.globalAlpha = value;
-	}
-	
+
 	// draw little dots on the axis line where data intersects
 	function axisDots() {
 //		var ctx = this.ctx.marks;
@@ -26,11 +29,24 @@
 		return this;
 	};
 
-	function composite(mode) {
-		ctx.foreground.globalCompositeOperation = mode;
-	}
-	
 	function install() {
+
+		var e = d3.dispatch.apply(this, d3.keys(config))
+		  .on("composite", function(d) { 
+			  ctx.foreground.globalCompositeOperation = d.value; 
+			  })
+		  .on("alpha", function(d) { 
+			  ctx.foreground.globalAlpha = d.value; 
+			  })
+		  .on("rate", function(d) { rqueue.rate(d.value); });
+
+		// expose the state of the renderer
+		pc.state.renderer = config;
+		// create getter/setters
+		getset(pc, config, e);
+		// expose events
+		d3.rebind(pc, e, "on");
+		
 		layers.forEach(function(layer) {
 			canvas[layer] = pc.selection
 			.append("canvas")
@@ -43,13 +59,13 @@
 		pc.render = render;
 		pc.resetRenderer = resetRenderer;
 		pc.clear = clear;
-		
+
 	}
 
 	function uninstall() {
 		resetRenderer();
 	}
-	
+
 	function resize() {
 		// canvas sizes
 		pc.selection.selectAll("canvas")
@@ -61,8 +77,8 @@
 		// default styles, needs to be set when canvas width changes
 		ctx.foreground.strokeStyle = __.color;
 		ctx.foreground.lineWidth = 1.4;
-		ctx.foreground.globalCompositeOperation = __.composite;
-		ctx.foreground.globalAlpha = __.alpha;
+		ctx.foreground.globalCompositeOperation = config.composite;
+		ctx.foreground.globalAlpha = config.alpha;
 		ctx.highlight.lineWidth = 3;
 		ctx.shadows.strokeStyle = "#dadada";
 
@@ -134,7 +150,7 @@
 		if (!__.dimensions.length) pc.detectDimensions();
 		if (!(__.dimensions[0] in yscale)) pc.autoscale();
 
-		render[__.mode]();
+		render[config.mode]();
 
 		events.render.call(this);
 		return this;
@@ -186,8 +202,6 @@
 
 	renderer.types["canvas"] = {
 			install: install,
-			alpha: alpha,
-			composite: composite,
 			resize: resize,
 			uninstall: uninstall
 	}

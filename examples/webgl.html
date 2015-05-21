@@ -27,7 +27,7 @@ d3.csv('data/cars.csv', function(data) {
 
   var color = function(d) { return colors[d.group]; };
 
-  pc_gl = d3.parcoords()("#example-gl")
+  pc_gl = d3.parcoords()("#example-gl", "webgl")
     .data(data)
     .color(color)
     .alpha(0.4)

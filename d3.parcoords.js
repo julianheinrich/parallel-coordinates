@@ -7,35 +7,27 @@ d3.parcoords = function(config) {
     dimensionTitleRotation: 0,
     types: {},
     brushed: false,
-    mode: "default",
-    rate: 20,
     width: 600,
     height: 300,
     margin: { top: 24, right: 0, bottom: 12, left: 0 },
     color: "#069",
-    composite: "source-over",
-    alpha: 0.7,
-    bundlingStrength: 0.5,
-    bundleDimension: null,
-    smoothness: 0.0,
-    showControlPoints: false,
     hideAxis : [],
-    // enables experimental webgl.
-    // To be removed once automatic detection and all features work in webgl.
-//    webgl: false,
-    normalize: false,
-    variance: 0.001
+    bundlingStrength: 0.5,
+	bundleDimension: null,
+	smoothness: 0.0,
+	showControlPoints: false
   };
 
   extend(__, config);
-var pc = function(selection) {
+var pc = function(selection, renderer) {
   selection = pc.selection = d3.select(selection);
+  renderer = renderer || "canvas";
 
   __.width = selection[0][0].clientWidth;
   __.height = selection[0][0].clientHeight;
 
   // canvas data layers
-  pc.renderType("webgl");  
+  pc.renderType(renderer);  
 
   // svg tick and brush layers
   pc.svg = selection
@@ -46,247 +38,6 @@ var pc = function(selection) {
       .attr("transform", "translate(" + __.margin.left + "," + __.margin.top + ")");
 
   return pc;
-};
-var events = d3.dispatch.apply(this,["render", "resize", "highlight", "brush", "brushend", "axesreorder"].concat(d3.keys(__))),
-    w = function() { return __.width - __.margin.right - __.margin.left; },
-    h = function() { return __.height - __.margin.top - __.margin.bottom; },
-    flags = {
-      brushable: false,
-      reorderable: false,
-      axes: false,
-      interactive: false,
-      shadows: false,
-      debug: false,
-      gl: false
-    },
-    xscale = d3.scale.ordinal(),
-    yscale = {},
-    dragging = {},
-    line = d3.svg.line(),
-    axis = d3.svg.axis().orient("left").ticks(5),
-    g, // groups for axes, brushes
-    canvas = {},
-    clusterCentroids = [];
-
-// side effects for setters
-var side_effects = d3.dispatch.apply(this,d3.keys(__))
-  .on("composite", function(d) { renderer.currentRenderer().composite(d.value); })
-  .on("alpha", function(d) { renderer.currentRenderer().alpha(d.value); })
-  .on("width", function(d) { pc.resize(); })
-  .on("height", function(d) { pc.resize(); })
-  .on("margin", function(d) { pc.resize(); })
-  .on("rate", function(d) { rqueue.rate(d.value); })
-  .on("data", function(d) {
-    if (flags.shadows){pc.shadows();}
-  })
-  .on("dimensions", function(d) {
-    xscale.domain(__.dimensions);
-    if (flags.interactive){pc.render().updateAxes();}
-  })
-  .on("bundleDimension", function(d) {
-	  if (!__.dimensions.length) pc.detectDimensions();
-	  if (!(__.dimensions[0] in yscale)) pc.autoscale();
-	  if (typeof d.value === "number") {
-		  if (d.value < __.dimensions.length) {
-			  __.bundleDimension = __.dimensions[d.value];
-		  } else if (d.value < __.hideAxis.length) {
-			  __.bundleDimension = __.hideAxis[d.value];
-		  }
-	  } else {
-		  __.bundleDimension = d.value;
-	  }
-
-	  __.clusterCentroids = compute_cluster_centroids(__.bundleDimension);
-  })
-  .on("hideAxis", function(d) {
-	  if (!__.dimensions.length) pc.detectDimensions();
-	  pc.dimensions(without(__.dimensions, d.value));
-  });
-
-// expose the state of the chart
-pc.state = __;
-pc.flags = flags;
-
-// create getter/setters
-getset(pc, __, events);
-
-// expose events
-d3.rebind(pc, events, "on");
-
-// getter/setter with event firing
-function getset(obj,state,events)  {
-  d3.keys(state).forEach(function(key) {
-    obj[key] = function(x) {
-      if (!arguments.length) {
-		return state[key];
-	}
-      var old = state[key];
-      state[key] = x;
-      side_effects[key].call(pc,{"value": x, "previous": old});
-      events[key].call(pc,{"value": x, "previous": old});
-      return obj;
-    };
-  });
-};
-
-function extend(target, source) {
-  for (key in source) {
-    target[key] = source[key];
-  }
-  return target;
-};
-
-function without(arr, item) {
-  return arr.filter(function(elem) { return item.indexOf(elem) === -1; })
-};
-pc.autoscale = function() {
-  // yscale
-  var defaultScales = {
-    "date": function(k) {
-      var extent = d3.extent(__.data, function(d) {
-        return d[k] ? d[k].getTime() : null;
-      });
-
-      // special case if single value
-      if (extent[0] === extent[1]) {
-        return d3.scale.ordinal()
-          .domain([extent[0]])
-          .rangePoints([h()+1, 1]);
-      }
-
-      return d3.time.scale()
-        .domain(extent)
-        .range([h()+1, 1]);
-    },
-    "number": function(k) {
-      var extent = d3.extent(__.data, function(d) { return +d[k]; });
-
-      // special case if single value
-      if (extent[0] === extent[1]) {
-        return d3.scale.ordinal()
-          .domain([extent[0]])
-          .rangePoints([h()+1, 1]);
-      }
-
-      return d3.scale.linear()
-        .domain(extent)
-        .range([h()+1, 1]);
-    },
-    "string": function(k) {
-      var counts = {},
-          domain = [];
-
-      // Let's get the count for each value so that we can sort the domain based
-      // on the number of items for each value.
-      __.data.map(function(p) {
-        if (counts[p[k]] === undefined) {
-          counts[p[k]] = 1;
-        } else {
-          counts[p[k]] = counts[p[k]] + 1;
-        }
-      });
-
-      domain = Object.getOwnPropertyNames(counts).sort(function(a, b) {
-        return counts[a] - counts[b];
-      });
-
-      return d3.scale.ordinal()
-        .domain(domain)
-        .rangePoints([h()+1, 1]);
-    }
-  };
-
-  __.dimensions.forEach(function(k) {
-    yscale[k] = defaultScales[__.types[k]](k);
-  });
-
-  __.hideAxis.forEach(function(k) {
-    yscale[k] = defaultScales[__.types[k]](k);
-  });
-
-  // xscale
-  xscale.rangePoints([0, w()], 1);
-
-  renderer.currentRenderer().resize();
-  
-  return this;
-};
-
-pc.scale = function(d, domain) {
-	yscale[d].domain(domain);
-
-	return this;
-};
-
-pc.flip = function(d) {
-	//yscale[d].domain().reverse();					// does not work
-	yscale[d].domain(yscale[d].domain().reverse()); // works
-
-	return this;
-};
-
-pc.commonScale = function(global, type) {
-	var t = type || "number";
-	if (typeof global === 'undefined') {
-		global = true;
-	}
-
-	// scales of the same type
-	var scales = __.dimensions.concat(__.hideAxis).filter(function(p) {
-		return __.types[p] == t;
-	});
-
-	if (global) {
-		var extent = d3.extent(scales.map(function(p,i) {
-				return yscale[p].domain();
-			}).reduce(function(a,b) {
-				return a.concat(b);
-			}));
-
-		scales.forEach(function(d) {
-			yscale[d].domain(extent);
-		});
-
-	} else {
-		scales.forEach(function(k) {
-			yscale[k].domain(d3.extent(__.data, function(d) { return +d[k]; }));
-		});
-	}
-
-	// update centroids
-	if (__.bundleDimension !== null) {
-		pc.bundleDimension(__.bundleDimension);
-	}
-
-	return this;
-};
-pc.detectDimensions = function() {
-  pc.types(pc.detectDimensionTypes(__.data));
-  pc.dimensions(d3.keys(pc.types()));
-  return this;
-};
-
-// a better "typeof" from this post: http://stackoverflow.com/questions/7390426/better-way-to-get-type-of-a-javascript-variable
-pc.toType = function(v) {
-  return ({}).toString.call(v).match(/\s([a-zA-Z]+)/)[1].toLowerCase();
-};
-
-// try to coerce to number before returning type
-pc.toTypeCoerceNumbers = function(v) {
-  if ((parseFloat(v) == v) && (v != null)) {
-	return "number";
-}
-  return pc.toType(v);
-};
-
-// attempt to determine types of each dimension based on first row of data
-pc.detectDimensionTypes = function(data) {
-  var types = {};
-  d3.keys(data[0])
-    .forEach(function(col) {
-      types[col] = pc.toTypeCoerceNumbers(data[0][col]);
-    });
-  return types;
 };
 //pc.render = function() {
 //  // try to autodetect dimensions and create scales
@@ -383,13 +134,16 @@ pc.renderType = function(type) {
 
 (function() {
 
+	var config = {
+			composite: "source-over",
+			alpha: 0.7,
+			mode: "default",
+			rate: 20
+	};
+
 	var ctx = {};
 	var layers = ["shadows", "marks", "foreground", "highlight"];
-	
-	function alpha(value) {
-		ctx.foreground.globalAlpha = value;
-	}
-	
+
 	// draw little dots on the axis line where data intersects
 	function axisDots() {
 //		var ctx = this.ctx.marks;
@@ -407,11 +161,24 @@ pc.renderType = function(type) {
 		return this;
 	};
 
-	function composite(mode) {
-		ctx.foreground.globalCompositeOperation = mode;
-	}
-	
 	function install() {
+
+		var e = d3.dispatch.apply(this, d3.keys(config))
+		  .on("composite", function(d) { 
+			  ctx.foreground.globalCompositeOperation = d.value; 
+			  })
+		  .on("alpha", function(d) { 
+			  ctx.foreground.globalAlpha = d.value; 
+			  })
+		  .on("rate", function(d) { rqueue.rate(d.value); });
+
+		// expose the state of the renderer
+		pc.state.renderer = config;
+		// create getter/setters
+		getset(pc, config, e);
+		// expose events
+		d3.rebind(pc, e, "on");
+		
 		layers.forEach(function(layer) {
 			canvas[layer] = pc.selection
 			.append("canvas")
@@ -424,13 +191,13 @@ pc.renderType = function(type) {
 		pc.render = render;
 		pc.resetRenderer = resetRenderer;
 		pc.clear = clear;
-		
+
 	}
 
 	function uninstall() {
 		resetRenderer();
 	}
-	
+
 	function resize() {
 		// canvas sizes
 		pc.selection.selectAll("canvas")
@@ -442,8 +209,8 @@ pc.renderType = function(type) {
 		// default styles, needs to be set when canvas width changes
 		ctx.foreground.strokeStyle = __.color;
 		ctx.foreground.lineWidth = 1.4;
-		ctx.foreground.globalCompositeOperation = __.composite;
-		ctx.foreground.globalAlpha = __.alpha;
+		ctx.foreground.globalCompositeOperation = config.composite;
+		ctx.foreground.globalAlpha = config.alpha;
 		ctx.highlight.lineWidth = 3;
 		ctx.shadows.strokeStyle = "#dadada";
 
@@ -515,7 +282,7 @@ pc.renderType = function(type) {
 		if (!__.dimensions.length) pc.detectDimensions();
 		if (!(__.dimensions[0] in yscale)) pc.autoscale();
 
-		render[__.mode]();
+		render[config.mode]();
 
 		events.render.call(this);
 		return this;
@@ -567,8 +334,6 @@ pc.renderType = function(type) {
 
 	renderer.types["canvas"] = {
 			install: install,
-			alpha: alpha,
-			composite: composite,
 			resize: resize,
 			uninstall: uninstall
 	}
@@ -577,6 +342,14 @@ pc.renderType = function(type) {
 
 (function() {
 
+	var config = {
+			alpha: 0.7,
+			normalize: false,
+			variance: 0.001,
+			mode: "default",
+			composite: "source-over"
+	};
+	
 	var shaders = {},
 	lineShader = null,
 	splatShader = null,
@@ -615,6 +388,15 @@ pc.renderType = function(type) {
 			throw "please include gl-matrix.js";
 		}
 
+		var e = d3.dispatch.apply(this, d3.keys(config));
+
+		// expose the state of the renderer
+		pc.state.renderer = config;
+		// create getter/setters
+		getset(pc, config, e);
+		// expose events
+		d3.rebind(pc, e, "on");
+		
 		layers.forEach(function(layer) {
 			canvas[layer] = pc.selection
 			.append("canvas")
@@ -744,7 +526,7 @@ pc.renderType = function(type) {
 		if (!__.dimensions.length) pc.detectDimensions();
 		if (!(__.dimensions[0] in yscale)) pc.autoscale();
 
-		render[__.mode]();
+		render[config.mode]();
 
 		events.render.call(this);
 		return this;
@@ -756,7 +538,7 @@ pc.renderType = function(type) {
 		if (!__.dimensions.length) pc.detectDimensions();
 		if (!(__.dimensions[0] in yscale)) pc.autoscale();
 		
-		if (__.normalize) {
+		if (config.normalize) {
 			gl.bindFramebuffer(gl.FRAMEBUFFER, rttFramebuffer);
 			gl.viewport(0, 0, rttFramebuffer.width, rttFramebuffer.height);
 			// set background to black for normalization to work properly
@@ -770,7 +552,7 @@ pc.renderType = function(type) {
 		gl.enable(gl.BLEND);
 		gl.disable(gl.DEPTH_TEST);
 
-		switch(__.composite) {
+		switch(__.renderer.composite) {
 		case "source-over": gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 		break;
 		case "lighter": gl.blendFunc(gl.ONE, gl.ONE);	// additive blending
@@ -785,7 +567,7 @@ pc.renderType = function(type) {
 
 		var draw = drawSplats;
 
-		if (__.variance <= 0.001) {	
+		if (__.renderer.variance <= 0.001) {	
 			draw = drawLines;
 		} else {
 			draw = drawSplats;
@@ -797,7 +579,7 @@ pc.renderType = function(type) {
 			draw(__.data);
 		}
 
-		if (__.normalize) {
+		if (__.renderer.normalize) {
 			// RENDER TO encode floats as unsigned byte
 			gl.bindFramebuffer(gl.FRAMEBUFFER, outputFramebuffer);
 			gl.clearColor(0, 0, 0, 1); // black
@@ -931,8 +713,8 @@ pc.renderType = function(type) {
 		mat4.multiply(mvpMatrix, projectionMatrix, modelMatrix);
 
 		gl.uniformMatrix4fv(splatShader.mvpMatrixUniform, false, mvpMatrix);
-		gl.uniform1f(splatShader.variance, __.variance);
-		gl.uniform1i(splatShader.normalize, __.normalize ? 1 : 0);
+		gl.uniform1f(splatShader.variance, __.renderer.variance);
+		gl.uniform1i(splatShader.normalize, __.renderer.normalize ? 1 : 0);
 
 		gl.drawArrays(gl.TRIANGLES, 0, linePositionBufferObject.numItems);
 	}
@@ -955,7 +737,7 @@ pc.renderType = function(type) {
 		var j = 0;
 
 		// LINES
-		if (__.variance <= 0.001) {
+		if (__.renderer.variance <= 0.001) {
 
 			vertexCount = dimCount * sampleCount;
 
@@ -981,7 +763,7 @@ pc.renderType = function(type) {
 			data.forEach(function(x) {
 				var color = d3.rgb(d3.functor(__.color)(x));
 				for (var d = 0; d < dimCount; d++) {
-					lineColors.set([color.r/255.0, color.g/255.0, color.b/255.0, __.alpha], j);
+					lineColors.set([color.r/255.0, color.g/255.0, color.b/255.0, config.alpha], j);
 					j += 4;
 				}
 			});
@@ -1088,7 +870,7 @@ pc.renderType = function(type) {
 				var color = d3.rgb(d3.functor(__.color)(data[x]));
 				for (var d = 0; d < dimCount - 1; d++) {
 					for (var vertex = 0; vertex < 6; vertex++) {
-						lineColors.set([color.r/255.0, color.g/255.0, color.b/255.0, __.alpha], j);
+						lineColors.set([color.r/255.0, color.g/255.0, color.b/255.0, config.alpha], j);
 						j += 4;
 					}
 				}
@@ -1411,14 +1193,254 @@ pc.renderType = function(type) {
 		';
 
 	renderer.types["webgl"] = {
-			alpha: function() {},		// noop
-			composite: function() {},	// noop
 			install: install,
 			resize: resize,
 			uninstall: uninstall
 	}
 
-})();function compute_cluster_centroids(d) {
+})();var events = d3.dispatch.apply(this,["render", "resize", "highlight", "brush", "brushend", "axesreorder"].concat(d3.keys(__))),
+    w = function() { return __.width - __.margin.right - __.margin.left; },
+    h = function() { return __.height - __.margin.top - __.margin.bottom; },
+    flags = {
+      brushable: false,
+      reorderable: false,
+      axes: false,
+      interactive: false,
+      shadows: false,
+      debug: false,
+      gl: false
+    },
+    xscale = d3.scale.ordinal(),
+    yscale = {},
+    dragging = {},
+    line = d3.svg.line(),
+    axis = d3.svg.axis().orient("left").ticks(5),
+    g, // groups for axes, brushes
+    canvas = {},
+    clusterCentroids = [];
+
+// side effects for setters
+var side_effects = d3.dispatch.apply(this,d3.keys(__))
+  .on("width", function(d) { pc.resize(); })
+  .on("height", function(d) { pc.resize(); })
+  .on("margin", function(d) { pc.resize(); })
+  .on("data", function(d) {
+    if (flags.shadows){pc.shadows();}
+  })
+  .on("dimensions", function(d) {
+    xscale.domain(__.dimensions);
+    if (flags.interactive){pc.render().updateAxes();}
+  })
+  .on("hideAxis", function(d) {
+	  if (!__.dimensions.length) pc.detectDimensions();
+	  pc.dimensions(without(__.dimensions, d.value));
+  })
+  .on("bundleDimension", function(d) {
+	if (!__.dimensions.length) pc.detectDimensions();
+	if (!(__.dimensions[0] in yscale)) pc.autoscale();
+	if (typeof d.value === "number") {
+		if (d.value < __.dimensions.length) {
+			__.bundleDimension = __.dimensions[d.value];
+		} else if (d.value < __.hideAxis.length) {
+			__.bundleDimension = __.hideAxis[d.value];
+		}
+	} else {
+		__.bundleDimension = d.value;
+	}
+
+	__.clusterCentroids = compute_cluster_centroids(__.bundleDimension);
+  });
+
+// expose the state of the chart
+pc.state = __;
+pc.flags = flags;
+
+// create getter/setters
+getset(pc, __, events, side_effects);
+
+// expose events
+d3.rebind(pc, events, "on");
+
+// getter/setter with event firing
+function getset(obj,state,events, side_effects)  {
+  d3.keys(state).forEach(function(key) {
+    obj[key] = function(x) {
+      if (!arguments.length) {
+		return state[key];
+      }
+      var old = state[key];
+      state[key] = x;
+      if (side_effects !== undefined) {
+    	  side_effects[key].call(pc,{"value": x, "previous": old});
+      }
+      if (events !== undefined) {
+    	  events[key].call(pc,{"value": x, "previous": old});
+      }
+      return obj;
+    };
+  });
+};
+
+function extend(target, source) {
+  for (key in source) {
+    target[key] = source[key];
+  }
+  return target;
+};
+
+function without(arr, item) {
+  return arr.filter(function(elem) { return item.indexOf(elem) === -1; })
+};
+pc.autoscale = function() {
+  // yscale
+  var defaultScales = {
+    "date": function(k) {
+      var extent = d3.extent(__.data, function(d) {
+        return d[k] ? d[k].getTime() : null;
+      });
+
+      // special case if single value
+      if (extent[0] === extent[1]) {
+        return d3.scale.ordinal()
+          .domain([extent[0]])
+          .rangePoints([h()+1, 1]);
+      }
+
+      return d3.time.scale()
+        .domain(extent)
+        .range([h()+1, 1]);
+    },
+    "number": function(k) {
+      var extent = d3.extent(__.data, function(d) { return +d[k]; });
+
+      // special case if single value
+      if (extent[0] === extent[1]) {
+        return d3.scale.ordinal()
+          .domain([extent[0]])
+          .rangePoints([h()+1, 1]);
+      }
+
+      return d3.scale.linear()
+        .domain(extent)
+        .range([h()+1, 1]);
+    },
+    "string": function(k) {
+      var counts = {},
+          domain = [];
+
+      // Let's get the count for each value so that we can sort the domain based
+      // on the number of items for each value.
+      __.data.map(function(p) {
+        if (counts[p[k]] === undefined) {
+          counts[p[k]] = 1;
+        } else {
+          counts[p[k]] = counts[p[k]] + 1;
+        }
+      });
+
+      domain = Object.getOwnPropertyNames(counts).sort(function(a, b) {
+        return counts[a] - counts[b];
+      });
+
+      return d3.scale.ordinal()
+        .domain(domain)
+        .rangePoints([h()+1, 1]);
+    }
+  };
+
+  __.dimensions.forEach(function(k) {
+    yscale[k] = defaultScales[__.types[k]](k);
+  });
+
+  __.hideAxis.forEach(function(k) {
+    yscale[k] = defaultScales[__.types[k]](k);
+  });
+
+  // xscale
+  xscale.rangePoints([0, w()], 1);
+
+  renderer.currentRenderer().resize();
+  
+  return this;
+};
+
+pc.scale = function(d, domain) {
+	yscale[d].domain(domain);
+
+	return this;
+};
+
+pc.flip = function(d) {
+	//yscale[d].domain().reverse();					// does not work
+	yscale[d].domain(yscale[d].domain().reverse()); // works
+
+	return this;
+};
+
+pc.commonScale = function(global, type) {
+	var t = type || "number";
+	if (typeof global === 'undefined') {
+		global = true;
+	}
+
+	// scales of the same type
+	var scales = __.dimensions.concat(__.hideAxis).filter(function(p) {
+		return __.types[p] == t;
+	});
+
+	if (global) {
+		var extent = d3.extent(scales.map(function(p,i) {
+				return yscale[p].domain();
+			}).reduce(function(a,b) {
+				return a.concat(b);
+			}));
+
+		scales.forEach(function(d) {
+			yscale[d].domain(extent);
+		});
+
+	} else {
+		scales.forEach(function(k) {
+			yscale[k].domain(d3.extent(__.data, function(d) { return +d[k]; }));
+		});
+	}
+
+	// update centroids
+	if (__.bundleDimension !== null) {
+		pc.bundleDimension(__.bundleDimension);
+	}
+
+	return this;
+};
+pc.detectDimensions = function() {
+  pc.types(pc.detectDimensionTypes(__.data));
+  pc.dimensions(d3.keys(pc.types()));
+  return this;
+};
+
+// a better "typeof" from this post: http://stackoverflow.com/questions/7390426/better-way-to-get-type-of-a-javascript-variable
+pc.toType = function(v) {
+  return ({}).toString.call(v).match(/\s([a-zA-Z]+)/)[1].toLowerCase();
+};
+
+// try to coerce to number before returning type
+pc.toTypeCoerceNumbers = function(v) {
+  if ((parseFloat(v) == v) && (v != null)) {
+	return "number";
+}
+  return pc.toType(v);
+};
+
+// attempt to determine types of each dimension based on first row of data
+pc.detectDimensionTypes = function(data) {
+  var types = {};
+  d3.keys(data[0])
+    .forEach(function(col) {
+      types[col] = pc.toTypeCoerceNumbers(data[0][col]);
+    });
+  return types;
+};
+function compute_cluster_centroids(d) {
 
 	var clusterCentroids = d3.map();
 	var clusterCounts = d3.map();

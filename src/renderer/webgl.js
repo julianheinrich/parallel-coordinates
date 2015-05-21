@@ -2,6 +2,14 @@
 
 (function() {
 
+	var config = {
+			alpha: 0.7,
+			normalize: false,
+			variance: 0.001,
+			mode: "default",
+			composite: "source-over"
+	};
+	
 	var shaders = {},
 	lineShader = null,
 	splatShader = null,
@@ -40,6 +48,15 @@
 			throw "please include gl-matrix.js";
 		}
 
+		var e = d3.dispatch.apply(this, d3.keys(config));
+
+		// expose the state of the renderer
+		pc.state.renderer = config;
+		// create getter/setters
+		getset(pc, config, e);
+		// expose events
+		d3.rebind(pc, e, "on");
+		
 		layers.forEach(function(layer) {
 			canvas[layer] = pc.selection
 			.append("canvas")
@@ -169,7 +186,7 @@
 		if (!__.dimensions.length) pc.detectDimensions();
 		if (!(__.dimensions[0] in yscale)) pc.autoscale();
 
-		render[__.mode]();
+		render[config.mode]();
 
 		events.render.call(this);
 		return this;
@@ -181,7 +198,7 @@
 		if (!__.dimensions.length) pc.detectDimensions();
 		if (!(__.dimensions[0] in yscale)) pc.autoscale();
 		
-		if (__.normalize) {
+		if (config.normalize) {
 			gl.bindFramebuffer(gl.FRAMEBUFFER, rttFramebuffer);
 			gl.viewport(0, 0, rttFramebuffer.width, rttFramebuffer.height);
 			// set background to black for normalization to work properly
@@ -195,7 +212,7 @@
 		gl.enable(gl.BLEND);
 		gl.disable(gl.DEPTH_TEST);
 
-		switch(__.composite) {
+		switch(__.renderer.composite) {
 		case "source-over": gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 		break;
 		case "lighter": gl.blendFunc(gl.ONE, gl.ONE);	// additive blending
@@ -210,7 +227,7 @@
 
 		var draw = drawSplats;
 
-		if (__.variance <= 0.001) {	
+		if (__.renderer.variance <= 0.001) {	
 			draw = drawLines;
 		} else {
 			draw = drawSplats;
@@ -222,7 +239,7 @@
 			draw(__.data);
 		}
 
-		if (__.normalize) {
+		if (__.renderer.normalize) {
 			// RENDER TO encode floats as unsigned byte
 			gl.bindFramebuffer(gl.FRAMEBUFFER, outputFramebuffer);
 			gl.clearColor(0, 0, 0, 1); // black
@@ -356,8 +373,8 @@
 		mat4.multiply(mvpMatrix, projectionMatrix, modelMatrix);
 
 		gl.uniformMatrix4fv(splatShader.mvpMatrixUniform, false, mvpMatrix);
-		gl.uniform1f(splatShader.variance, __.variance);
-		gl.uniform1i(splatShader.normalize, __.normalize ? 1 : 0);
+		gl.uniform1f(splatShader.variance, __.renderer.variance);
+		gl.uniform1i(splatShader.normalize, __.renderer.normalize ? 1 : 0);
 
 		gl.drawArrays(gl.TRIANGLES, 0, linePositionBufferObject.numItems);
 	}
@@ -380,7 +397,7 @@
 		var j = 0;
 
 		// LINES
-		if (__.variance <= 0.001) {
+		if (__.renderer.variance <= 0.001) {
 
 			vertexCount = dimCount * sampleCount;
 
@@ -406,7 +423,7 @@
 			data.forEach(function(x) {
 				var color = d3.rgb(d3.functor(__.color)(x));
 				for (var d = 0; d < dimCount; d++) {
-					lineColors.set([color.r/255.0, color.g/255.0, color.b/255.0, __.alpha], j);
+					lineColors.set([color.r/255.0, color.g/255.0, color.b/255.0, config.alpha], j);
 					j += 4;
 				}
 			});
@@ -513,7 +530,7 @@
 				var color = d3.rgb(d3.functor(__.color)(data[x]));
 				for (var d = 0; d < dimCount - 1; d++) {
 					for (var vertex = 0; vertex < 6; vertex++) {
-						lineColors.set([color.r/255.0, color.g/255.0, color.b/255.0, __.alpha], j);
+						lineColors.set([color.r/255.0, color.g/255.0, color.b/255.0, config.alpha], j);
 						j += 4;
 					}
 				}
@@ -836,8 +853,6 @@
 		';
 
 	renderer.types["webgl"] = {
-			alpha: function() {},		// noop
-			composite: function() {},	// noop
 			install: install,
 			resize: resize,
 			uninstall: uninstall

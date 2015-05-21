@@ -77,11 +77,18 @@
 
 		pc.render = render;
 		pc.clear = clear;
+		
+		resize();
 
 	}
 
 	function uninstall() {
-		// TODO
+		layers.forEach(function(layer) {
+			delete ctx[layer];
+			delete canvas[layer];
+		});
+		
+		pc.selection.selectAll("canvas").remove();
 	}
 	
 	function initTextureFramebuffers() {
@@ -310,7 +317,6 @@
 		.style("margin-left", __.margin.left + "px")
 		.attr("width", w()+2)
 		.attr("height", h()+2);
-
 	}
 	
 	function drawLines(data) {

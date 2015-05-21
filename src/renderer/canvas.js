@@ -49,8 +49,8 @@
 		
 		layers.forEach(function(layer) {
 			canvas[layer] = pc.selection
-			.append("canvas")
-			.attr("class", layer)[0][0];
+			  .append("canvas")
+			  .attr("class", layer)[0][0];
 			ctx[layer] = canvas[layer].getContext("2d");
 		});
 
@@ -59,11 +59,19 @@
 		pc.render = render;
 		pc.resetRenderer = resetRenderer;
 		pc.clear = clear;
+		
+		resize();
 
 	}
 
 	function uninstall() {
-		resetRenderer();
+		layers.forEach(function(layer) {
+			delete ctx[layer];
+			delete canvas[layer];
+		});
+		
+		pc.selection.selectAll("canvas").remove();
+		
 	}
 
 	function resize() {
@@ -186,10 +194,7 @@
 	};
 
 	function resetRenderer() {
-		layers.forEach(function(layer) {
-			delete ctx[layer];
-			delete canvas[layer];
-		});
+		
 	}
 
 	function shadows() {

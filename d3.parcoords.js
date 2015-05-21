@@ -29,14 +29,6 @@ var pc = function(selection, renderer) {
   // canvas data layers
   pc.renderType(renderer);  
 
-  // svg tick and brush layers
-  pc.svg = selection
-    .append("svg")
-      .attr("width", __.width)
-      .attr("height", __.height)
-    .append("svg:g")
-      .attr("transform", "translate(" + __.margin.left + "," + __.margin.top + ")");
-
   return pc;
 };
 //pc.render = function() {
@@ -93,7 +85,7 @@ var renderer = {
   }
 };
 
-pc.renderers = function() {
+pc.renderTypes = function() {
   return Object.getOwnPropertyNames(renderer.types);
 };
 
@@ -102,7 +94,7 @@ pc.renderType = function(type) {
     return renderer.type;
   }
 
-  if (pc.renderers().indexOf(type) === -1) {
+  if (pc.renderTypes().indexOf(type) === -1) {
     throw "pc.renderer: Unsupported renderer: " + type;
   }
 
@@ -117,14 +109,29 @@ pc.renderType = function(type) {
 
     // Next, we need to 'uninstall' the current brushMode.
     renderer.types[renderer.type].uninstall(pc);
+    
+    // remove axes and svg layer
+    pc.selection.selectAll('svg').remove();
+    
     // Finally, we can install the requested one.
     renderer.type = type;
     renderer.types[renderer.type].install();
-//    if (mode === "None") {
-//      delete pc.brushPredicate;
-//    } else {
-//      pc.brushPredicate = brushPredicate;
-//    }
+
+    // for now, keep svg tick and brush layers the same
+    // for all renderer
+    pc.svg = pc.selection
+      .append("svg")
+        .attr("width", __.width)
+        .attr("height", __.height)
+      .append("svg:g")
+        .attr("transform", "translate(" + __.margin.left + "," + __.margin.top + ")");
+    
+//    pc.createAxes();
+ // axes, destroys old brushes.
+    if (g) pc.createAxes();
+    var bm = pc.brushMode();
+    pc.brushMode("None").brushMode(bm);
+    
   }
 
   return pc;
@@ -181,8 +188,8 @@ pc.renderType = function(type) {
 		
 		layers.forEach(function(layer) {
 			canvas[layer] = pc.selection
-			.append("canvas")
-			.attr("class", layer)[0][0];
+			  .append("canvas")
+			  .attr("class", layer)[0][0];
 			ctx[layer] = canvas[layer].getContext("2d");
 		});
 
@@ -191,11 +198,19 @@ pc.renderType = function(type) {
 		pc.render = render;
 		pc.resetRenderer = resetRenderer;
 		pc.clear = clear;
+		
+		resize();
 
 	}
 
 	function uninstall() {
-		resetRenderer();
+		layers.forEach(function(layer) {
+			delete ctx[layer];
+			delete canvas[layer];
+		});
+		
+		pc.selection.selectAll("canvas").remove();
+		
 	}
 
 	function resize() {
@@ -318,10 +333,7 @@ pc.renderType = function(type) {
 	};
 
 	function resetRenderer() {
-		layers.forEach(function(layer) {
-			delete ctx[layer];
-			delete canvas[layer];
-		});
+		
 	}
 
 	function shadows() {
@@ -417,11 +429,18 @@ pc.renderType = function(type) {
 
 		pc.render = render;
 		pc.clear = clear;
+		
+		resize();
 
 	}
 
 	function uninstall() {
-		// TODO
+		layers.forEach(function(layer) {
+			delete ctx[layer];
+			delete canvas[layer];
+		});
+		
+		pc.selection.selectAll("canvas").remove();
 	}
 	
 	function initTextureFramebuffers() {
@@ -650,7 +669,6 @@ pc.renderType = function(type) {
 		.style("margin-left", __.margin.left + "px")
 		.attr("width", w()+2)
 		.attr("height", h()+2);
-
 	}
 	
 	function drawLines(data) {

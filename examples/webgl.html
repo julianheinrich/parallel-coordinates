@@ -7,12 +7,19 @@
 <script src="lib/webgl-utils.js"></script>
 <script src="lib/webgl-debug.js"></script>
 <script src="lib/underscore.js"></script>
+<script src="lib/d3.svg.multibrush.js"></script>
 <script src="../d3.parcoords.js"></script>
-<div id="example-gl" class="parcoords" style="width:1300px;height:370px;"></div>
+<div id="example" class="parcoords" style="width:1300px;height:370px;"></div>
+
+<p>
+  <label for="sltRenderer">Renderer:</label>
+  <select id="sltRenderer">
+  </select>
+</p>
 
 <script id="progressive">// linear color scale
 // interact with this variable from a javascript console
-var pc_gl;
+var pc;
 
 // load csv file and create the chart
 d3.csv('data/cars.csv', function(data) {
@@ -27,7 +34,7 @@ d3.csv('data/cars.csv', function(data) {
 
   var color = function(d) { return colors[d.group]; };
 
-  pc_gl = d3.parcoords()("#example-gl", "webgl")
+  pc = d3.parcoords()("#example", "canvas")
     .data(data)
     .color(color)
     .alpha(0.4)
@@ -35,11 +42,28 @@ d3.csv('data/cars.csv', function(data) {
  //   .mode("queue")
     .render()
     .reorderable()
-    .brushMode("1D-axes");
+    .brushMode("1D-axes-multi");
     
 
-  pc_gl.svg.selectAll("text")
+  pc.svg.selectAll("text")
     .style("font", "10px sans-serif");
+  
+  var sltRenderer = d3.select("#sltRenderer");
+  
+  sltRenderer.selectAll('option')
+    .data(pc.renderTypes())
+    .enter()
+      .append('option')
+      .text(function(d) { return d; });
+  
+  sltRenderer.on('change', function() {
+	 pc.renderType(this.value).render(); 
+	 pc.svg.selectAll("text")
+	    .style("font", "10px sans-serif");
+  });
+  
+  sltRenderer.property('value', 'canvas');
+  
 });
 </script>
 

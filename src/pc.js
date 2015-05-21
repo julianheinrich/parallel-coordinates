@@ -8,13 +8,5 @@ var pc = function(selection, renderer) {
   // canvas data layers
   pc.renderType(renderer);  
 
-  // svg tick and brush layers
-  pc.svg = selection
-    .append("svg")
-      .attr("width", __.width)
-      .attr("height", __.height)
-    .append("svg:g")
-      .attr("transform", "translate(" + __.margin.left + "," + __.margin.top + ")");
-
   return pc;
 };

@@ -22,7 +22,7 @@
 var pc;
 
 // load csv file and create the chart
-d3.csv('data/cars.csv', function(data) {
+d3.csv('data/nutrients.csv', function(data) {
   var colorgen = d3.scale.category20();
   var colors = {};
   _(data).chain()
@@ -36,6 +36,7 @@ d3.csv('data/cars.csv', function(data) {
 
   pc = d3.parcoords()("#example", "canvas")
     .data(data)
+    .hideAxis(["name"])
     .color(color)
     .alpha(0.4)
     .margin({ top: 24, left: 150, bottom: 12, right: 0 })
@@ -57,7 +58,9 @@ d3.csv('data/cars.csv', function(data) {
       .text(function(d) { return d; });
   
   sltRenderer.on('change', function() {
-	 pc.renderType(this.value).render(); 
+	 pc.renderType(this.value)
+	   .render()
+	   .reorderable();
 	 pc.svg.selectAll("text")
 	    .style("font", "10px sans-serif");
   });

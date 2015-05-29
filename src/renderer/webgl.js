@@ -48,15 +48,6 @@
 			throw "please include gl-matrix.js";
 		}
 
-		var e = d3.dispatch.apply(this, d3.keys(config));
-
-		// expose the state of the renderer
-		pc.state.renderer = config;
-		// create getter/setters
-		getset(pc, config, e);
-		// expose events
-		d3.rebind(pc, e, "on");
-		
 		layers.forEach(function(layer) {
 			canvas[layer] = pc.selection
 			.append("canvas")
@@ -71,12 +62,26 @@
 		if (!gl.getExtension('OES_texture_float')) {
 			throw new Error('This demo requires the OES_texture_float extension');
 		}
+		
+		var e = d3.dispatch.apply(this, d3.keys(config));
+
+		// expose the state of the renderer
+		pc.state.renderer = config;
+		// create getter/setters
+		getset(pc, config, e);
+		// expose events
+		d3.rebind(pc, e, "on");
 
 		setupShaders();
 		initTextureFramebuffers();
 
 		pc.render = render;
 		pc.clear = clear;
+		
+//		uploadData(__.data);
+//		side_effects.on("data", function(d) {
+//			uploadData(d.value);
+//		});
 		
 		resize();
 
@@ -344,9 +349,9 @@
 
 		var dimCount = __.dimensions.length;
 		gl.uniformMatrix4fv(lineShader.mvpMatrixUniform, false, mvpMatrix);
-		data.map(function(d, i) {
-			gl.drawArrays(gl.LINE_STRIP, i * linePositionBufferObject.dimCount, linePositionBufferObject.dimCount);
-		});
+//		data.map(function(d, i) {
+		gl.drawArrays(gl.LINE_STRIP, 0, linePositionBufferObject.numItems);
+//		});
 
 	}
 
@@ -412,14 +417,26 @@
 
 			for (var s = 0; s < sampleCount; s++) {
 				// vertices
-				for (var d = 0; d < dimCount; d++) {
-					var ip = yscale[p[d]](data[s][p[d]]);
+				if (!(s % 2)) {	// left to right
+					for (var d = 0; d < dimCount; d++) {
+						var ip = yscale[p[d]](data[s][p[d]]);
 
-					linePositions[j + 0] = position(p[d]);
-					linePositions[j + 1] = ip;
+						linePositions[j + 0] = position(p[d]);
+						linePositions[j + 1] = ip;
 
-					j += 2;
+						j += 2;
+					}
+				} else {		// right to left
+					for (var d = dimCount - 1; d >= 0; d--) {
+						var ip = yscale[p[d]](data[s][p[d]]);
+
+						linePositions[j + 0] = position(p[d]);
+						linePositions[j + 1] = ip;
+
+						j += 2;
+					}
 				}
+				
 			}
 
 			lineColors = new Float32Array(vertexCount * 4);

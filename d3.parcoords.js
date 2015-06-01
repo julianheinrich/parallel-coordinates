@@ -362,6 +362,8 @@ pc.renderType = function(type) {
 			composite: "source-over"
 	};
 	
+	var previous = {};
+	
 	var shaders = {},
 	lineShader = null,
 	splatShader = null,
@@ -429,16 +431,46 @@ pc.renderType = function(type) {
 
 		pc.render = render;
 		pc.clear = clear;
+		pc.resetRenderer = resetRenderer;
 		
-//		uploadData(__.data);
-//		side_effects.on("data", function(d) {
-//			uploadData(d.value);
-//		});
+		uploadData(__.data);
+		side_effects.on("data", function(d) {
+			uploadData(d.value);
+		})
+		.on("color", function(d) {
+			uploadData(__.data);
+		})
+		.on("hideAxis", function(d) {
+			uploadData(__.data);
+		})
+		.on("margin", function(d) {
+			uploadData(__.data);
+		});
+		
+		events.on("axesreorder", function(d) {
+			uploadData(__.data);
+		})
+		.on("axisdrag", function(d) {
+			uploadData(__.data);
+		});
+		
+		e.on("normalize", function(d) {
+			if(d.value) {
+				previous.composite = pc.composite();
+				pc.composite("lighter");
+			} else {
+				pc.composite(previous.composite);
+			}
+		});
 		
 		resize();
 
 	}
 
+	function resetRenderer() {
+		
+	}
+	
 	function uninstall() {
 		layers.forEach(function(layer) {
 			delete ctx[layer];
@@ -516,34 +548,74 @@ pc.renderType = function(type) {
 		gl.clear(gl.COLOR_BUFFER_BIT);
 	};
 
-	var glqueue = d3.renderQueue(function(chunk) {
-		drawSplats(chunk);
-	})
-	.rate(50)
-	.clear(function() { pc.clear('foreground'); });
-
-//	pc.render.queueGL = function() {
-//
-//		pc.clear('foreground');
-//
-//		gl.viewport(0, 0, w(), h());
-//
-//		gl.enable(gl.BLEND);
-//		gl.disable(gl.DEPTH_TEST);
-//
-//		projectionMatrix = mat4.create();
-//		modelMatrix = mat4.create();
-//		mat4.ortho(0, w(), h()+2, 1, -1.0, 1.0, projectionMatrix);
-//		mat4.identity(modelMatrix);
-//
-////		gl.useProgram(splatShader);
-//
-//		if (__.brushed) {
-//			glqueue(__.brushed);
-//		} else {
-//			glqueue(__.data);
+	var glqueue = d3.renderQueue(function(chunk, i) {
+		if (config.normalize) {
+			gl.bindFramebuffer(gl.FRAMEBUFFER, rttFramebuffer);
+			gl.viewport(0, 0, rttFramebuffer.width, rttFramebuffer.height);
+		}
+		
+//		switch(__.renderer.composite) {
+//		case "source-over": 
+//			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+//			break;
+//		case "lighter": 
+//			gl.blendFunc(gl.ONE, gl.ONE);	// additive blending
+//			break;
+//		default: 
+//			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 //		}
-//	}
+		
+		if (config.variance <= 0.001) {	
+			drawLines([chunk]);					// optimization for very 'thin' splats
+		} else {
+			drawSplats([chunk]);
+		}
+		
+		if (config.normalize) {	
+			renderFBO();
+		}
+	})
+	.rate(50);
+	//.clear(function() { pc.clear('foreground'); });
+
+	render.queue = function() {
+
+		if (config.normalize) {
+			gl.bindFramebuffer(gl.FRAMEBUFFER, rttFramebuffer);
+			gl.viewport(0, 0, rttFramebuffer.width, rttFramebuffer.height);
+			// set background to black for normalization to work properly
+			gl.clearColor(0, 0, 0, 1); 
+		} else {
+			gl.clearColor(1, 1, 1, 1);	// white by default
+			gl.viewport(0, 0, w(), h());
+		}
+
+		gl.clear(gl.COLOR_BUFFER_BIT);
+		gl.enable(gl.BLEND);
+		gl.disable(gl.DEPTH_TEST);
+
+		switch(__.renderer.composite) {
+		case "source-over": 
+			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+			break;
+		case "lighter": 
+			gl.blendFunc(gl.ONE, gl.ONE);	// additive blending
+			break;
+		default: 
+			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+		}
+
+		projectionMatrix = mat4.create();
+		modelMatrix = mat4.create();
+		mat4.ortho(projectionMatrix, 0, w(), h()+2, 1, -1.0, 1.0);
+		mat4.identity(modelMatrix);
+
+		if (__.brushed) {
+			glqueue(__.brushed);
+		} else {
+			glqueue(__.data);
+		}
+	}
 
 	function render() {
 		// try to autodetect dimensions and create scales
@@ -556,11 +628,7 @@ pc.renderType = function(type) {
 		return this;
 	}
 	
-	render['default'] = function() {
-		
-		// try to autodetect dimensions and create scales
-		if (!__.dimensions.length) pc.detectDimensions();
-		if (!(__.dimensions[0] in yscale)) pc.autoscale();
+	render['default'] = function(func) {
 		
 		if (config.normalize) {
 			gl.bindFramebuffer(gl.FRAMEBUFFER, rttFramebuffer);
@@ -577,11 +645,14 @@ pc.renderType = function(type) {
 		gl.disable(gl.DEPTH_TEST);
 
 		switch(__.renderer.composite) {
-		case "source-over": gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-		break;
-		case "lighter": gl.blendFunc(gl.ONE, gl.ONE);	// additive blending
-		break;
-		default: gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+		case "source-over": 
+			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+			break;
+		case "lighter": 
+			gl.blendFunc(gl.ONE, gl.ONE);	// additive blending
+			break;
+		default: 
+			gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 		}
 
 		projectionMatrix = mat4.create();
@@ -592,7 +663,7 @@ pc.renderType = function(type) {
 		var draw = drawSplats;
 
 		if (__.renderer.variance <= 0.001) {	
-			draw = drawLines;
+			draw = drawLines;					// optimization for very 'thin' splats
 		} else {
 			draw = drawSplats;
 		}
@@ -603,70 +674,72 @@ pc.renderType = function(type) {
 			draw(__.data);
 		}
 
-		if (__.renderer.normalize) {
-			// RENDER TO encode floats as unsigned byte
-			gl.bindFramebuffer(gl.FRAMEBUFFER, outputFramebuffer);
-			gl.clearColor(0, 0, 0, 1); // black
-			gl.clear(gl.COLOR_BUFFER_BIT);
-//			pc.clear('foreground');
-
-			gl.useProgram(encodeShader);
-
-			gl.viewport(0, 0, outputFramebuffer.width, outputFramebuffer.height);
-			gl.disable(gl.BLEND);
-
-			gl.enableVertexAttribArray(encodeShader.vertex);
-			gl.bindBuffer(gl.ARRAY_BUFFER, framebufferPositions);
-			gl.vertexAttribPointer(encodeShader.vertex, framebufferPositions.itemSize, gl.FLOAT, false, 0, 0);
-
-			gl.activeTexture(gl.TEXTURE0);
-			gl.bindTexture(gl.TEXTURE_2D, rttTexture);
-			gl.uniform1i(encodeShader.texture, 0);
-
-			gl.drawArrays(gl.TRIANGLES, 0, framebufferPositions.numItems);
-
-			// read back to CPU
-			gl.readPixels(0, 0, outputTexture.width, outputTexture.height, gl.RGBA, gl.UNSIGNED_BYTE, outputStorage);
-			outputConverted = new Float32Array(outputStorage.buffer);
-
-			var min = 1000000, max = 0;
-			for (var i = 0; i < outputConverted.length; ++i) {
-				if (outputConverted[i] < min) {
-					min = outputConverted[i];
-				}
-				if (outputConverted[i] > max) {
-					max = outputConverted[i];
-				}
-			}
-
-			//console.log("min: " + min + ", max:" + max);
-
-			gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-//			gl.clear(gl.COLOR_BUFFER_BIT);
-			pc.clear('foreground');
-
-			gl.useProgram(fboShader);
-
-			gl.viewport(0, 0, w(), h());
-
-			gl.enableVertexAttribArray(fboShader.vertex);
-			gl.bindBuffer(gl.ARRAY_BUFFER, framebufferPositions);
-			gl.vertexAttribPointer(fboShader.vertex, framebufferPositions.itemSize, gl.FLOAT, false, 0, 0);
-
-			gl.activeTexture(gl.TEXTURE0);
-			gl.bindTexture(gl.TEXTURE_2D, rttTexture);
-			gl.uniform1i(fboShader.texture, 0);
-
-			gl.uniform1f(fboShader.min, min);
-			gl.uniform1f(fboShader.max, max);
-
-			gl.drawArrays(gl.TRIANGLES, 0, framebufferPositions.numItems);
+		if (config.normalize) {
+			
+			renderFBO();
 
 		}
 
 	}
+	
+	function renderFBO() {
+		// RENDER TO encode floats as unsigned byte
+		gl.bindFramebuffer(gl.FRAMEBUFFER, outputFramebuffer);
+		gl.clearColor(0, 0, 0, 1); // black
+		gl.clear(gl.COLOR_BUFFER_BIT);
+//		pc.clear('foreground');
 
+		gl.useProgram(encodeShader);
+
+		gl.viewport(0, 0, outputFramebuffer.width, outputFramebuffer.height);
+		gl.disable(gl.BLEND);
+
+		gl.enableVertexAttribArray(encodeShader.vertex);
+		gl.bindBuffer(gl.ARRAY_BUFFER, framebufferPositions);
+		gl.vertexAttribPointer(encodeShader.vertex, framebufferPositions.itemSize, gl.FLOAT, false, 0, 0);
+
+		gl.activeTexture(gl.TEXTURE0);
+		gl.bindTexture(gl.TEXTURE_2D, rttTexture);
+		gl.uniform1i(encodeShader.texture, 0);
+
+		gl.drawArrays(gl.TRIANGLES, 0, framebufferPositions.numItems);
+
+		// read back to CPU
+		gl.readPixels(0, 0, outputTexture.width, outputTexture.height, gl.RGBA, gl.UNSIGNED_BYTE, outputStorage);
+		outputConverted = new Float32Array(outputStorage.buffer);
+
+		var min = 1000000, max = 0;
+		for (var i = 0; i < outputConverted.length; ++i) {
+			if (outputConverted[i] < min) {
+				min = outputConverted[i];
+			}
+			if (outputConverted[i] > max) {
+				max = outputConverted[i];
+			}
+		}
+		
+		gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+		pc.clear('foreground');
+
+		gl.useProgram(fboShader);
+
+		gl.viewport(0, 0, w(), h());
+
+		gl.enableVertexAttribArray(fboShader.vertex);
+		gl.bindBuffer(gl.ARRAY_BUFFER, framebufferPositions);
+		gl.vertexAttribPointer(fboShader.vertex, framebufferPositions.itemSize, gl.FLOAT, false, 0, 0);
+
+		gl.activeTexture(gl.TEXTURE0);
+		gl.bindTexture(gl.TEXTURE_2D, rttTexture);
+		gl.uniform1i(fboShader.texture, 0);
+
+		gl.uniform1f(fboShader.min, min);
+		gl.uniform1f(fboShader.max, max);
+
+		gl.drawArrays(gl.TRIANGLES, 0, framebufferPositions.numItems);
+	}
+	
 	function resize() {
 		// canvas sizes
 		pc.selection.selectAll("canvas")
@@ -676,10 +749,13 @@ pc.renderType = function(type) {
 		.attr("height", h()+2);
 	}
 	
-	function drawLines(data) {
+	function drawLines(start, count) {
+		start = start | 0;
+		count = count | linePositionBufferObject.numItems;
+		
 		// upload data and color to the GPU
 		// NOTE: this should only be done once, not on every redraw
-		uploadData(data);
+//		uploadData(data);
 //		uploadColors(data);
 
 		gl.useProgram(lineShader);
@@ -698,19 +774,15 @@ pc.renderType = function(type) {
 		// This multiplies the modelview matrix by the projection matrix, and stores the result in the MVP matrix
 		// (which now contains model * view * projection).
 		mat4.multiply(mvpMatrix, projectionMatrix, modelMatrix);
-
-		var dimCount = __.dimensions.length;
 		gl.uniformMatrix4fv(lineShader.mvpMatrixUniform, false, mvpMatrix);
-//		data.map(function(d, i) {
-		gl.drawArrays(gl.LINE_STRIP, 0, linePositionBufferObject.numItems);
-//		});
-
+		
+		gl.drawArrays(gl.LINE_STRIP, start * linePositionBufferObject.dimCount, count);
 	}
-
+	
 //	Draws splats from the given vertex data.
 	function drawSplats(data) {
 
-		uploadData(data);
+//		uploadData(data);
 //		uploadColors(data);
 
 		gl.useProgram(splatShader);
@@ -742,7 +814,7 @@ pc.renderType = function(type) {
 		gl.drawArrays(gl.TRIANGLES, 0, linePositionBufferObject.numItems);
 	}
 
-
+	
 	function uploadData(data) {
 
 		// try to autodetect dimensions and create scales
@@ -811,16 +883,16 @@ pc.renderType = function(type) {
 			vertexCount = triangleCount * 3;
 
 //			var offset = uncertainty / 2;
-			linePositions = new Float32Array(vertexCount * 2);
-			// two values per vertex (x,y)
+			linePositions = new Float32Array(vertexCount * 2); // two values per vertex (x,y)
+			
+			// non-optimized: draw a quad the size of a segment
+			var lefttop = h();
+			var leftbottom = 0;
+			var righttop = h();
+			var rightbottom = 0;
+			
 			for (var s = 0; s < sampleCount; s++) {
 				for (var d = 0; d < dimCount - 1; d++) {
-
-					var lefttop = h();
-					var leftbottom = 0;
-					var righttop = h();
-					var rightbottom = 0;
-
 					// compute vertices of two triangles to get a single quad
 					// tl
 					linePositions[j + 0] = position(p[d]);
@@ -1233,7 +1305,7 @@ pc.renderType = function(type) {
 			uninstall: uninstall
 	}
 
-})();var events = d3.dispatch.apply(this,["render", "resize", "highlight", "brush", "brushend", "axesreorder"].concat(d3.keys(__))),
+})();var events = d3.dispatch.apply(this,["render", "resize", "highlight", "brush", "brushend", "axesreorder", "axisdrag"].concat(d3.keys(__))),
     w = function() { return __.width - __.margin.right - __.margin.left; },
     h = function() { return __.height - __.margin.top - __.margin.bottom; },
     flags = {
@@ -1708,6 +1780,7 @@ pc.reorderable = function() {
         dragging[d] = Math.min(w(), Math.max(0, this.__origin__ += d3.event.dx));
         __.dimensions.sort(function(a, b) { return position(a) - position(b); });
         xscale.domain(__.dimensions);
+        events.axisdrag.call(pc, d);
         pc.render();
         g.attr("transform", function(d) { return "translate(" + position(d) + ")"; });
       })
@@ -1745,6 +1818,7 @@ pc.reorderable = function() {
         delete this.__origin__;
         delete dragging[d];
         d3.select(this).transition().attr("transform", "translate(" + xscale(d) + ")");
+        events.axisdrag.call(pc, d);
         pc.render();
         if (flags.shadows) pc.shadows();
       }));

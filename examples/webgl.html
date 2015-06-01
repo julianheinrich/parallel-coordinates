@@ -15,6 +15,7 @@
   <label for="sltRenderer">Renderer:</label>
   <select id="sltRenderer">
   </select>
+  <input type="checkbox" id="chkNormalize", disabled="true">Normalize</input>
 </p>
 
 <script id="progressive">// linear color scale
@@ -40,7 +41,7 @@ d3.csv('data/nutrients.csv', function(data) {
     .color(color)
     .alpha(0.4)
     .margin({ top: 24, left: 150, bottom: 12, right: 0 })
- //   .mode("queue")
+    //.mode("queue")
     .render()
     .reorderable()
     .brushMode("1D-axes-multi");
@@ -59,13 +60,20 @@ d3.csv('data/nutrients.csv', function(data) {
   
   sltRenderer.on('change', function() {
 	 pc.renderType(this.value)
+	   //.mode("queue")
 	   .render()
 	   .reorderable();
 	 pc.svg.selectAll("text")
 	    .style("font", "10px sans-serif");
+	 d3.select("#chkNormalize").property('disabled', this.value !== 'webgl');
   });
   
   sltRenderer.property('value', 'canvas');
+  
+  d3.select("#chkNormalize")
+  	.on("change", function() {
+  		pc.normalize(!pc.normalize()).render();
+  	})
   
 });
 </script>

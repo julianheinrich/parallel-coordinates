@@ -140,6 +140,7 @@ pc.reorderable = function() {
         dragging[d] = Math.min(w(), Math.max(0, this.__origin__ += d3.event.dx));
         __.dimensions.sort(function(a, b) { return position(a) - position(b); });
         xscale.domain(__.dimensions);
+        events.axisdrag.call(pc, d);
         pc.render();
         g.attr("transform", function(d) { return "translate(" + position(d) + ")"; });
       })
@@ -177,6 +178,7 @@ pc.reorderable = function() {
         delete this.__origin__;
         delete dragging[d];
         d3.select(this).transition().attr("transform", "translate(" + xscale(d) + ")");
+        events.axisdrag.call(pc, d);
         pc.render();
         if (flags.shadows) pc.shadows();
       }));

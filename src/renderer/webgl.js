@@ -116,7 +116,7 @@
 	}
 
 	function resetRenderer() {
-		
+		// intentionally empty
 	}
 	
 	function uninstall() {
@@ -319,7 +319,7 @@
 		if (__.brushed) {
 			draw(__.brushed);
 		} else {
-			draw(__.data);
+			draw(linePositionBufferObject);
 		}
 
 		if (config.normalize) {
@@ -397,7 +397,7 @@
 		.attr("height", h()+2);
 	}
 	
-	function drawLines(start, count) {
+	function drawLines(linePositionBufferObject, start, count) {
 		start = start | 0;
 		count = count | linePositionBufferObject.numItems;
 		
@@ -426,6 +426,7 @@
 		
 		gl.drawArrays(gl.LINE_STRIP, start * linePositionBufferObject.dimCount, count);
 	}
+	
 	
 //	Draws splats from the given vertex data.
 	function drawSplats(data) {

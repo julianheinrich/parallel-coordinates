@@ -37,7 +37,9 @@ pc.createAxes = function() {
         return d;
       })
     .enter().append("svg:g")
-      .attr("class", "dimension")
+      .attr("class", function(d) {
+        return "dimension " + __.dimensions[d].title;
+      })
       .attr("transform", function(d) {
         return "translate(" + xscale(d) + ")";
       });
